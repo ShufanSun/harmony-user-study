@@ -23,6 +23,7 @@ input[type=text]{background:#2a2e38;border:1px solid #3a3f4b;color:var(--fg);bor
 .rate b{font-size:12px;color:#8b8f99;margin-right:2px}
 .star{width:34px;height:34px;border-radius:6px;background:#2a2e38;border:1px solid #3a3f4b;color:#cfd3db;cursor:pointer;font-size:14px}
 .star.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.star.taken{opacity:.32}
 .bestbtn{margin-top:8px;width:100%;background:#2a2e38}
 .bestbtn.on{background:var(--good)}
 .hint{color:#8b8f99;font-size:13px}
@@ -34,7 +35,7 @@ input[type=text]{background:#2a2e38;border:1px solid #3a3f4b;color:var(--fg);bor
 
 <div id="intro">
   <h1>3D Scene Reconstruction — Perceptual Study</h1>
-  <p>You'll see <b id="ncase"></b> real room photos. For each, six reconstructions (A–F, shown in random order) attempt to recreate the scene. For every reconstruction, rate how well it matches the input photo (geometry, objects, layout, realism) on a <b>1–5 scale where 1 = best match and 5 = worst</b> (lower is better), then mark the single <b>best overall</b> one.</p>
+  <p>You'll see <b id="ncase"></b> real room photos. For each, six reconstructions (A–F, shown in random order) attempt to recreate the scene. <b>Rank all six</b> by how well they match the input photo (geometry, objects, layout, realism): give each a distinct rank from <b>1 = best</b> to <b>6 = worst</b>. Clicking a rank that's already used moves it to the current one, so every rank ends up used exactly once.</p>
   <p class="hint">~5–10 minutes. Your answers are saved in your browser; at the end you'll download a CSV to send back. Nothing is uploaded automatically.</p>
   <p>Participant ID / name: <input id="pid" type="text" placeholder="e.g. alice or p01"></p>
   <button id="start">Start</button>
@@ -66,7 +67,7 @@ input[type=text]{background:#2a2e38;border:1px solid #3a3f4b;color:var(--fg);bor
 </div>
 <script>
 const D = {"cases": ["bedroom00", "bedroom1", "bing_bing_028_000029", "living_room9", "livingroom1", "livingroom4", "livingroom4_", "office8", "pexels_11125423", "pexels_12881062", "pexels_12885119", "pexels_13695046", "pexels_15456208", "pexels_1743229", "pexels_2082093", "pexels_2416932", "pexels_271655", "pexels_35539061", "pexels_4119845", "pexels_6523270", "pexels_6585740", "pexels_6782439", "pexels_6899445", "pexels_6980704", "pexels_7005297", "pexels_7598133", "pexels_8082231", "pexels_8082554", "pexels_8134787", "pexels_pixabay_13114555"], "methods": ["ours", "sam3d", "3d_regen", "gen3dsr", "viga", "cast"], "ext": "jpg"};
-const RATE_LABELS = {1:"best",2:"good",3:"ok",4:"weak",5:"worst"};
+const RATE_LABELS = {1:"best",2:"2nd",3:"3rd",4:"4th",5:"5th",6:"worst"};
 let pid="", order=[], idx=0, resp={};   // resp[case] = {ratings:{method:1-5}, best:method}
 document.getElementById('ncase').textContent = D.cases.length;
 
@@ -91,31 +92,41 @@ document.getElementById('start').onclick=()=>{
   render();
 };
 
+const NM=D.methods.length; // 6 → ranks 1..6
 function render(){
   const cse=order[idx];
-  resp[cse]=resp[cse]||{ratings:{},best:null};
+  resp[cse]=resp[cse]||{ranks:{}};   // ranks[method] = 1..6 (1=best), each used once
   document.getElementById('counter').textContent=`Scene ${idx+1} of ${order.length}`;
   document.getElementById('prog').style.width=((idx)/order.length*100)+'%';
   document.getElementById('input').src=`${cse}/input.${D.ext}`;
   const grid=document.getElementById('grid');grid.innerHTML='';
+  const ranks=resp[cse].ranks;
   panelsFor(cse).forEach(p=>{
     const div=document.createElement('div');div.className='panel';div.dataset.method=p.method;
-    if(resp[cse].best===p.method)div.classList.add('best');
+    if(ranks[p.method]===1)div.classList.add('best');
     div.innerHTML=`<div class="lab">${p.label}</div>
       <img src="${cse}/${p.method}.${D.ext}" onclick="lb(this.src)">
-      <div class="rate"><b>match (1=best → 5=worst):</b></div>`;
+      <div class="rate"><b>rank (1=best → ${NM}=worst):</b></div>`;
     const row=div.querySelector('.rate');
-    for(let s=1;s<=5;s++){const b=document.createElement('button');b.className='star'+(resp[cse].ratings[p.method]===s?' on':'');
-      b.textContent=s;b.title=RATE_LABELS[s]||'';b.onclick=()=>{resp[cse].ratings[p.method]=s;render();save();};row.appendChild(b);}
-    const best=document.createElement('button');best.className='bestbtn'+(resp[cse].best===p.method?' on':'');
-    best.textContent=resp[cse].best===p.method?'★ best overall':'mark best overall';
-    best.onclick=()=>{resp[cse].best=p.method;render();save();};
-    div.appendChild(best);grid.appendChild(div);
+    for(let r=1;r<=NM;r++){
+      const b=document.createElement('button');
+      const mine=ranks[p.method]===r;
+      const takenByOther=Object.keys(ranks).some(m=>m!==p.method&&ranks[m]===r);
+      b.className='star'+(mine?' on':'')+(takenByOther?' taken':'');
+      b.textContent=r;b.title=RATE_LABELS[r]||'';
+      b.onclick=()=>{ // assign rank r to this panel, stealing it from any other
+        for(const m in ranks){ if(ranks[m]===r) delete ranks[m]; }
+        ranks[p.method]=r; render(); save();
+      };
+      row.appendChild(b);
+    }
+    grid.appendChild(div);
   });
-  const done=D.methods.every(m=>resp[cse].ratings[m])&&resp[cse].best;
+  const n=D.methods.filter(m=>ranks[m]).length;
+  const done=n===NM;                 // all 6 ranked ⇒ a valid 1..N permutation (steal keeps them unique)
   document.getElementById('next').disabled=!done;
   document.getElementById('prev').disabled=idx===0;
-  document.getElementById('status').textContent=done?'✓ complete':`rate all 6 + pick best`;
+  document.getElementById('status').textContent=done?'✓ ranked all '+NM:`${n}/${NM} ranked — give each a distinct rank`;
   document.getElementById('next').textContent=idx===order.length-1?'Finish ✓':'Next →';
 }
 function save(){localStorage.setItem('study_'+pid,JSON.stringify(resp));}
@@ -123,10 +134,10 @@ document.getElementById('next').onclick=()=>{ if(idx<order.length-1){idx++;rende
 document.getElementById('prev').onclick=()=>{ if(idx>0){idx--;render();window.scrollTo(0,0);} };
 
 const ENDPOINT="https://script.google.com/macros/s/AKfycbyGlBNjp05fWhv_N54PR7Xwb4m3Um69ubJ9Y4uMktD6fFQOjNuZWjUefENBdnLxK5Wodw/exec";
-function buildRows(){ // flat list of response objects
+function buildRows(){ // flat list of response objects; "rating" field carries the RANK (1=best..N=worst)
   const out=[];
-  for(const cse of order){const r=resp[cse];if(!r)continue;
-    for(const m of D.methods){out.push({participant:pid,scene:cse,method:m,rating:r.ratings[m]||'',is_best:r.best===m?1:0});}}
+  for(const cse of order){const r=resp[cse];if(!r||!r.ranks)continue;
+    for(const m of D.methods){const rk=r.ranks[m]||'';out.push({participant:pid,scene:cse,method:m,rating:rk,is_best:rk===1?1:0});}}
   return out;
 }
 async function submit(){
