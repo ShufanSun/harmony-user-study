@@ -1,0 +1,162 @@
+<!doctype html><html><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Scene Reconstruction Study</title>
+<style>
+:root{--bg:#12141a;--fg:#e8e8ea;--card:#1c1f27;--accent:#4f8cff;--good:#37c871}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--fg);font:15px/1.5 system-ui,sans-serif;margin:0}
+.wrap{max-width:1180px;margin:0 auto;padding:20px}
+h1{font-size:22px}h2{font-size:17px;color:#9aa0ad}
+button{background:var(--accent);color:#fff;border:0;border-radius:8px;padding:10px 18px;font-size:15px;cursor:pointer}
+button.sec{background:#2a2e38}
+button:disabled{opacity:.4;cursor:not-allowed}
+input[type=text]{background:#2a2e38;border:1px solid #3a3f4b;color:var(--fg);border-radius:8px;padding:9px 12px;font-size:15px;width:280px}
+.bar{height:6px;background:#2a2e38;border-radius:4px;overflow:hidden;margin:10px 0}
+.bar>i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.inputimg{max-height:300px;border-radius:8px;border:1px solid #333;display:block;margin:8px auto}
+.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-top:14px}
+.panel{background:var(--card);border:2px solid #262a33;border-radius:10px;padding:10px}
+.panel.best{border-color:var(--good)}
+.panel img{width:100%;border-radius:6px;cursor:zoom-in}
+.lab{font-weight:700;color:#9aa0ad;margin-bottom:6px}
+.rate{display:flex;gap:6px;margin-top:8px;flex-wrap:wrap;align-items:center}
+.rate b{font-size:12px;color:#8b8f99;margin-right:2px}
+.star{width:34px;height:34px;border-radius:6px;background:#2a2e38;border:1px solid #3a3f4b;color:#cfd3db;cursor:pointer;font-size:14px}
+.star.on{background:var(--accent);border-color:var(--accent);color:#fff}
+.bestbtn{margin-top:8px;width:100%;background:#2a2e38}
+.bestbtn.on{background:var(--good)}
+.hint{color:#8b8f99;font-size:13px}
+#lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);display:none;align-items:center;justify-content:center;z-index:9;cursor:zoom-out}
+#lightbox img{max-width:96vw;max-height:96vh}
+.foot{display:flex;justify-content:space-between;align-items:center;margin-top:18px;gap:10px;flex-wrap:wrap}
+@media(max-width:760px){.grid{grid-template-columns:1fr 1fr}}
+</style></head><body><div class="wrap">
+
+<div id="intro">
+  <h1>3D Scene Reconstruction — Perceptual Study</h1>
+  <p>You'll see <b id="ncase"></b> real room photos. For each, six reconstructions (A–F, shown in random order) attempt to recreate the scene. For every reconstruction, rate how well it matches the input photo (geometry, objects, layout, realism) from 1 (poor) to 5 (excellent), then mark the single <b>best overall</b> one.</p>
+  <p class="hint">~5–10 minutes. Your answers are saved in your browser; at the end you'll download a CSV to send back. Nothing is uploaded automatically.</p>
+  <p>Participant ID / name: <input id="pid" type="text" placeholder="e.g. alice or p01"></p>
+  <button id="start">Start</button>
+</div>
+
+<div id="study" style="display:none">
+  <div class="bar"><i id="prog"></i></div>
+  <h2 id="counter"></h2>
+  <p style="text-align:center;margin:4px 0" class="hint">Input photo</p>
+  <img id="input" class="inputimg">
+  <div class="grid" id="grid"></div>
+  <div class="foot">
+    <button class="sec" id="prev">← Back</button>
+    <span class="hint" id="status"></span>
+    <button id="next" disabled>Next →</button>
+  </div>
+</div>
+
+<div id="done" style="display:none">
+  <h1>All done — thank you! 🎉</h1>
+  <p>Please download your results and send the CSV back to the researcher.</p>
+  <p id="submitmsg" class="hint"></p>
+  <button id="resend" class="sec" style="display:none">↻ Retry submit</button>
+  <button id="dl">⬇ Download my results (CSV)</button>
+  <p class="hint" id="summary"></p>
+</div>
+
+<div id="lightbox"><img></div>
+</div>
+<script>
+const D = {"cases": ["bedroom00", "bedroom1", "bing_bing_028_000029", "living_room9", "livingroom1", "livingroom4", "livingroom4_", "office8", "pexels_11125423", "pexels_12881062", "pexels_12885119", "pexels_13695046", "pexels_15456208", "pexels_1743229", "pexels_2082093", "pexels_2416932", "pexels_271655", "pexels_35539061", "pexels_4119845", "pexels_6523270", "pexels_6585740", "pexels_6782439", "pexels_6899445", "pexels_6980704", "pexels_7005297", "pexels_7598133", "pexels_8082231", "pexels_8082554", "pexels_8134787", "pexels_pixabay_13114555"], "methods": ["ours", "sam3d", "3d_regen", "gen3dsr", "viga", "cast"], "ext": "jpg"};
+const RATE_LABELS = {1:"poor",5:"excellent"};
+let pid="", order=[], idx=0, resp={};   // resp[case] = {ratings:{method:1-5}, best:method}
+document.getElementById('ncase').textContent = D.cases.length;
+
+// deterministic PRNG so a given participant always gets the same shuffle
+function hashStr(s){let h=2166136261;for(let i=0;i<s.length;i++){h^=s.charCodeAt(i);h=Math.imul(h,16777619)}return h>>>0}
+function rng(seed){return function(){seed=(seed*1103515245+12345)&0x7fffffff;return seed/0x7fffffff}}
+function shuffle(arr,rand){arr=arr.slice();for(let i=arr.length-1;i>0;i--){const j=Math.floor(rand()*(i+1));[arr[i],arr[j]]=[arr[j],arr[i]]}return arr}
+
+function panelsFor(cse){ // returns [{label, method}] shuffled per (pid,case)
+  const r=rng(hashStr(pid+"|"+cse));
+  const sh=shuffle(D.methods,r);
+  return sh.map((m,i)=>({label:String.fromCharCode(65+i),method:m}));
+}
+
+document.getElementById('start').onclick=()=>{
+  pid=(document.getElementById('pid').value||'anon').trim();
+  order=D.cases.slice();
+  const saved=localStorage.getItem('study_'+pid);
+  if(saved){resp=JSON.parse(saved);}
+  document.getElementById('intro').style.display='none';
+  document.getElementById('study').style.display='';
+  render();
+};
+
+function render(){
+  const cse=order[idx];
+  resp[cse]=resp[cse]||{ratings:{},best:null};
+  document.getElementById('counter').textContent=`Scene ${idx+1} of ${order.length}`;
+  document.getElementById('prog').style.width=((idx)/order.length*100)+'%';
+  document.getElementById('input').src=`${cse}/input.${D.ext}`;
+  const grid=document.getElementById('grid');grid.innerHTML='';
+  panelsFor(cse).forEach(p=>{
+    const div=document.createElement('div');div.className='panel';div.dataset.method=p.method;
+    if(resp[cse].best===p.method)div.classList.add('best');
+    div.innerHTML=`<div class="lab">${p.label}</div>
+      <img src="${cse}/${p.method}.${D.ext}" onclick="lb(this.src)">
+      <div class="rate"><b>match:</b></div>`;
+    const row=div.querySelector('.rate');
+    for(let s=1;s<=5;s++){const b=document.createElement('button');b.className='star'+(resp[cse].ratings[p.method]===s?' on':'');
+      b.textContent=s;b.title=RATE_LABELS[s]||'';b.onclick=()=>{resp[cse].ratings[p.method]=s;render();save();};row.appendChild(b);}
+    const best=document.createElement('button');best.className='bestbtn'+(resp[cse].best===p.method?' on':'');
+    best.textContent=resp[cse].best===p.method?'★ best overall':'mark best overall';
+    best.onclick=()=>{resp[cse].best=p.method;render();save();};
+    div.appendChild(best);grid.appendChild(div);
+  });
+  const done=D.methods.every(m=>resp[cse].ratings[m])&&resp[cse].best;
+  document.getElementById('next').disabled=!done;
+  document.getElementById('prev').disabled=idx===0;
+  document.getElementById('status').textContent=done?'✓ complete':`rate all 6 + pick best`;
+  document.getElementById('next').textContent=idx===order.length-1?'Finish ✓':'Next →';
+}
+function save(){localStorage.setItem('study_'+pid,JSON.stringify(resp));}
+document.getElementById('next').onclick=()=>{ if(idx<order.length-1){idx++;render();window.scrollTo(0,0);} else finish(); };
+document.getElementById('prev').onclick=()=>{ if(idx>0){idx--;render();window.scrollTo(0,0);} };
+
+const ENDPOINT="https://script.google.com/macros/s/AKfycbyGlBNjp05fWhv_N54PR7Xwb4m3Um69ubJ9Y4uMktD6fFQOjNuZWjUefENBdnLxK5Wodw/exec";
+function buildRows(){ // flat list of response objects
+  const out=[];
+  for(const cse of order){const r=resp[cse];if(!r)continue;
+    for(const m of D.methods){out.push({participant:pid,scene:cse,method:m,rating:r.ratings[m]||'',is_best:r.best===m?1:0});}}
+  return out;
+}
+async function submit(){
+  const msg=document.getElementById('submitmsg'), rb=document.getElementById('resend');
+  if(!ENDPOINT){msg.textContent='(auto-submit not configured — please download the CSV and send it back)';return;}
+  msg.textContent='Submitting your responses…';rb.style.display='none';
+  try{
+    await fetch(ENDPOINT,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},
+      body:JSON.stringify({participant:pid,submitted_at:new Date().toISOString(),rows:buildRows()})});
+    msg.innerHTML='✓ Submitted — thank you! (You can also keep a CSV copy below.)';
+    localStorage.setItem('sent_'+pid,'1');
+  }catch(e){
+    msg.innerHTML='⚠ Auto-submit failed (network). Please click <b>Retry</b>, or download the CSV and email it back.';
+    rb.style.display='';
+  }
+}
+function finish(){
+  document.getElementById('study').style.display='none';
+  document.getElementById('done').style.display='';
+  let n=Object.keys(resp).length;document.getElementById('summary').textContent=`${n} scenes recorded for "${pid}".`;
+  submit();
+}
+document.getElementById('resend').onclick=submit;
+document.getElementById('dl').onclick=()=>{
+  let rows=[['participant','scene','method','rating','is_best']];
+  for(const o of buildRows()) rows.push([o.participant,o.scene,o.method,o.rating,o.is_best]);
+  const csv=rows.map(r=>r.map(x=>`"${x}"`).join(',')).join('\n');
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([csv],{type:'text/csv'}));
+  a.download=`study_${pid}.csv`;a.click();
+};
+function lb(src){const l=document.getElementById('lightbox');l.querySelector('img').src=src;l.style.display='flex';}
+document.getElementById('lightbox').onclick=function(){this.style.display='none';};
+</script></body></html>
