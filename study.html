@@ -66,7 +66,7 @@ input[type=text]{background:#2a2e38;border:1px solid #3a3f4b;color:var(--fg);bor
 <div id="lightbox"><img></div>
 </div>
 <script>
-const D = {"cases": ["bedroom00", "bedroom1", "bing_bing_028_000029", "living_room9", "livingroom1", "livingroom4", "livingroom4_", "office8", "pexels_11125423", "pexels_12881062", "pexels_12885119", "pexels_13695046", "pexels_15456208", "pexels_1743229", "pexels_2082093", "pexels_2416932", "pexels_271655", "pexels_35539061", "pexels_4119845", "pexels_6523270", "pexels_6585740", "pexels_6782439", "pexels_6899445", "pexels_6980704", "pexels_7005297", "pexels_7598133", "pexels_8082231", "pexels_8082554", "pexels_8134787", "pexels_pixabay_13114555"], "methods": ["ours", "sam3d", "3d_regen", "gen3dsr", "viga", "cast"], "ext": "jpg"};
+const D = {"cases": ["bedroom00", "bedroom1", "livingroom1", "living_room9", "office8", "bing_bing_028_000029", "pexels_2082093", "pexels_35539061", "pexels_12885119", "pexels_271655", "pexels_1743229", "pexels_6782439"], "methods": ["ours", "sam3d", "3d_regen", "gen3dsr", "viga", "cast"], "ext": "jpg"};
 const RATE_LABELS = {1:"best",2:"2nd",3:"3rd",4:"4th",5:"5th",6:"worst"};
 let pid="", order=[], idx=0, resp={};   // resp[case] = {ratings:{method:1-5}, best:method}
 document.getElementById('ncase').textContent = D.cases.length;
