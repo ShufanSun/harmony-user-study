@@ -34,7 +34,7 @@ input[type=text]{background:#2a2e38;border:1px solid #3a3f4b;color:var(--fg);bor
 
 <div id="intro">
   <h1>3D Scene Reconstruction — Perceptual Study</h1>
-  <p>You'll see <b id="ncase"></b> real room photos. For each, six reconstructions (A–F, shown in random order) attempt to recreate the scene. For every reconstruction, rate how well it matches the input photo (geometry, objects, layout, realism) from 1 (poor) to 5 (excellent), then mark the single <b>best overall</b> one.</p>
+  <p>You'll see <b id="ncase"></b> real room photos. For each, six reconstructions (A–F, shown in random order) attempt to recreate the scene. For every reconstruction, rate how well it matches the input photo (geometry, objects, layout, realism) on a <b>1–5 scale where 1 = best match and 5 = worst</b> (lower is better), then mark the single <b>best overall</b> one.</p>
   <p class="hint">~5–10 minutes. Your answers are saved in your browser; at the end you'll download a CSV to send back. Nothing is uploaded automatically.</p>
   <p>Participant ID / name: <input id="pid" type="text" placeholder="e.g. alice or p01"></p>
   <button id="start">Start</button>
@@ -66,7 +66,7 @@ input[type=text]{background:#2a2e38;border:1px solid #3a3f4b;color:var(--fg);bor
 </div>
 <script>
 const D = {"cases": ["bedroom00", "bedroom1", "bing_bing_028_000029", "living_room9", "livingroom1", "livingroom4", "livingroom4_", "office8", "pexels_11125423", "pexels_12881062", "pexels_12885119", "pexels_13695046", "pexels_15456208", "pexels_1743229", "pexels_2082093", "pexels_2416932", "pexels_271655", "pexels_35539061", "pexels_4119845", "pexels_6523270", "pexels_6585740", "pexels_6782439", "pexels_6899445", "pexels_6980704", "pexels_7005297", "pexels_7598133", "pexels_8082231", "pexels_8082554", "pexels_8134787", "pexels_pixabay_13114555"], "methods": ["ours", "sam3d", "3d_regen", "gen3dsr", "viga", "cast"], "ext": "jpg"};
-const RATE_LABELS = {1:"poor",5:"excellent"};
+const RATE_LABELS = {1:"best",2:"good",3:"ok",4:"weak",5:"worst"};
 let pid="", order=[], idx=0, resp={};   // resp[case] = {ratings:{method:1-5}, best:method}
 document.getElementById('ncase').textContent = D.cases.length;
 
@@ -103,7 +103,7 @@ function render(){
     if(resp[cse].best===p.method)div.classList.add('best');
     div.innerHTML=`<div class="lab">${p.label}</div>
       <img src="${cse}/${p.method}.${D.ext}" onclick="lb(this.src)">
-      <div class="rate"><b>match:</b></div>`;
+      <div class="rate"><b>match (1=best → 5=worst):</b></div>`;
     const row=div.querySelector('.rate');
     for(let s=1;s<=5;s++){const b=document.createElement('button');b.className='star'+(resp[cse].ratings[p.method]===s?' on':'');
       b.textContent=s;b.title=RATE_LABELS[s]||'';b.onclick=()=>{resp[cse].ratings[p.method]=s;render();save();};row.appendChild(b);}
