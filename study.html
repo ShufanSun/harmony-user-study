@@ -93,37 +93,46 @@ document.getElementById('start').onclick=()=>{
 };
 
 const NM=D.methods.length; // 6 → ranks 1..6
+// render() = build the panels+images for the current scene (only on scene change).
+// paint()  = update rank-button states only, WITHOUT recreating <img> (no reload/flicker).
 function render(){
   const cse=order[idx];
-  resp[cse]=resp[cse]||{ranks:{}};   // ranks[method] = 1..6 (1=best), each used once
+  resp[cse]=resp[cse]||{ranks:{}};
   document.getElementById('counter').textContent=`Scene ${idx+1} of ${order.length}`;
-  document.getElementById('prog').style.width=((idx)/order.length*100)+'%';
   document.getElementById('input').src=`${cse}/input.${D.ext}`;
   const grid=document.getElementById('grid');grid.innerHTML='';
-  const ranks=resp[cse].ranks;
   panelsFor(cse).forEach(p=>{
     const div=document.createElement('div');div.className='panel';div.dataset.method=p.method;
-    if(ranks[p.method]===1)div.classList.add('best');
     div.innerHTML=`<div class="lab">${p.label}</div>
       <img src="${cse}/${p.method}.${D.ext}" onclick="lb(this.src)">
       <div class="rate"><b>rank (1=best → ${NM}=worst):</b></div>`;
     const row=div.querySelector('.rate');
     for(let r=1;r<=NM;r++){
       const b=document.createElement('button');
-      const mine=ranks[p.method]===r;
-      const takenByOther=Object.keys(ranks).some(m=>m!==p.method&&ranks[m]===r);
-      b.className='star'+(mine?' on':'')+(takenByOther?' taken':'');
-      b.textContent=r;b.title=RATE_LABELS[r]||'';
-      b.onclick=()=>{ // assign rank r to this panel, stealing it from any other
-        for(const m in ranks){ if(ranks[m]===r) delete ranks[m]; }
-        ranks[p.method]=r; render(); save();
+      b.className='star';b.textContent=r;b.title=RATE_LABELS[r]||'';b.dataset.rank=r;
+      b.onclick=()=>{ const ranks=resp[cse].ranks;
+        for(const m in ranks){ if(ranks[m]===r) delete ranks[m]; } // steal → keep unique
+        ranks[p.method]=r; paint(); save();
       };
       row.appendChild(b);
     }
     grid.appendChild(div);
   });
-  const n=D.methods.filter(m=>ranks[m]).length;
-  const done=n===NM;                 // all 6 ranked ⇒ a valid 1..N permutation (steal keeps them unique)
+  paint();
+}
+function paint(){ // toggle classes + progress only; images untouched
+  const cse=order[idx], ranks=resp[cse].ranks, grid=document.getElementById('grid');
+  grid.querySelectorAll('.panel').forEach(div=>{
+    const m=div.dataset.method;
+    div.classList.toggle('best',ranks[m]===1);
+    div.querySelectorAll('.star').forEach(b=>{
+      const r=+b.dataset.rank;
+      b.classList.toggle('on',ranks[m]===r);
+      b.classList.toggle('taken',Object.keys(ranks).some(mm=>mm!==m&&ranks[mm]===r));
+    });
+  });
+  const n=D.methods.filter(m=>ranks[m]).length, done=n===NM;
+  document.getElementById('prog').style.width=((idx+(done?1:0))/order.length*100)+'%';
   document.getElementById('next').disabled=!done;
   document.getElementById('prev').disabled=idx===0;
   document.getElementById('status').textContent=done?'✓ ranked all '+NM:`${n}/${NM} ranked — give each a distinct rank`;
