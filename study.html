@@ -85,7 +85,7 @@ function panelsFor(cse){ // returns [{label, method}] shuffled per (pid,case)
 document.getElementById('start').onclick=()=>{
   pid=(document.getElementById('pid').value||'anon').trim();
   order=D.cases.slice();
-  const saved=localStorage.getItem('study_'+pid);
+  const saved=localStorage.getItem('studyRank_'+pid);
   if(saved){resp=JSON.parse(saved);}
   document.getElementById('intro').style.display='none';
   document.getElementById('study').style.display='';
@@ -97,7 +97,7 @@ const NM=D.methods.length; // 6 → ranks 1..6
 // paint()  = update rank-button states only, WITHOUT recreating <img> (no reload/flicker).
 function render(){
   const cse=order[idx];
-  resp[cse]=resp[cse]||{ranks:{}};
+  if(!resp[cse]||!resp[cse].ranks)resp[cse]={ranks:{}};
   document.getElementById('counter').textContent=`Scene ${idx+1} of ${order.length}`;
   document.getElementById('input').src=`${cse}/input.${D.ext}`;
   const grid=document.getElementById('grid');grid.innerHTML='';
@@ -138,7 +138,7 @@ function paint(){ // toggle classes + progress only; images untouched
   document.getElementById('status').textContent=done?'✓ ranked all '+NM:`${n}/${NM} ranked — give each a distinct rank`;
   document.getElementById('next').textContent=idx===order.length-1?'Finish ✓':'Next →';
 }
-function save(){localStorage.setItem('study_'+pid,JSON.stringify(resp));}
+function save(){localStorage.setItem('studyRank_'+pid,JSON.stringify(resp));}
 document.getElementById('next').onclick=()=>{ if(idx<order.length-1){idx++;render();window.scrollTo(0,0);} else finish(); };
 document.getElementById('prev').onclick=()=>{ if(idx>0){idx--;render();window.scrollTo(0,0);} };
 
